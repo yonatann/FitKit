@@ -32,24 +32,36 @@ class FitKit {
     DateTime dateFrom,
     DateTime dateTo,
     int limit,
+    bool isSleep,
   }) async {
-    return await _channel
-        .invokeListMethod('read', {
-          "type": _dataTypeToString(type),
-          "date_from": dateFrom?.millisecondsSinceEpoch ?? 1,
-          "date_to": (dateTo ?? DateTime.now()).millisecondsSinceEpoch,
-          "limit": limit,
-        })
-        .then(
-          (response) => response.map((item) => FitData.fromJson(item)).toList(),
-        )
-        .catchError(
-          (_) => throw UnsupportedException(type),
-          test: (e) {
-            if (e is PlatformException) return e.code == 'unsupported';
-            return false;
-          },
-        );
+    return await _channel.invokeListMethod('read', {
+      "type": _dataTypeToString(type),
+      "date_from": dateFrom?.millisecondsSinceEpoch ?? 1,
+      "date_to": (dateTo ?? DateTime.now()).millisecondsSinceEpoch,
+      "limit": limit,
+      "isSleep": isSleep
+    }).then(
+      (response) {
+        if (isSleep == true) {
+          List<FitData> res = List<FitData>();
+          for (var item in response) {
+            List list = item["sleep_session"];
+            for (var e in list) {
+              FitData fitData = FitData.fromJson(e);
+              res.add(fitData);
+            }
+          }
+          return res;
+        }
+        return response.map((item) => FitData.fromJson(item)).toList();
+      },
+    ).catchError(
+      (_) => throw UnsupportedException(type),
+      test: (e) {
+        if (e is PlatformException) return e.code == 'unsupported';
+        return false;
+      },
+    );
   }
 
   static Future<FitData> readLast(DataType type) async {
@@ -99,6 +111,7 @@ enum DataType {
 
 class UnsupportedException implements Exception {
   final DataType dataType;
+
   UnsupportedException(this.dataType);
 
   @override

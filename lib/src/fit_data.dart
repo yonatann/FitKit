@@ -15,6 +15,12 @@ class FitData {
     this.userEntered,
   );
 
+  Map toJson() => {
+    'value': value,
+    'dateFrom': dateFrom == null ? null : dateFrom.millisecondsSinceEpoch,
+    'dateTo': dateTo == null ? null : dateTo.millisecondsSinceEpoch,
+    'source': source
+  };
   FitData.fromJson(Map<dynamic, dynamic> json)
       : value = json['value'],
         dateFrom = DateTime.fromMillisecondsSinceEpoch(json['date_from']),

@@ -4,13 +4,13 @@ import android.app.Activity
 import android.util.Log
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.Scopes
 import com.google.android.gms.fitness.Fitness
+import com.google.android.gms.fitness.FitnessActivities
 import com.google.android.gms.fitness.FitnessOptions
-import com.google.android.gms.fitness.data.DataPoint
-import com.google.android.gms.fitness.data.DataSet
-import com.google.android.gms.fitness.data.Field
-import com.google.android.gms.fitness.data.Session
+import com.google.android.gms.fitness.data.*
 import com.google.android.gms.fitness.request.DataReadRequest
+import com.google.android.gms.fitness.request.SessionInsertRequest
 import com.google.android.gms.fitness.request.SessionReadRequest
 import com.google.android.gms.fitness.result.DataReadResponse
 import com.google.android.gms.fitness.result.SessionReadResponse
@@ -69,6 +69,11 @@ class FitKitPlugin(private val registrar: Registrar) : MethodCallHandler {
                     val request = ReadRequest.fromCall(call)
                     read(request, result)
                 }
+                "readActivity" -> {
+                    val request = ReadRequest.fromCall(call)
+                    read(request, result)
+                }
+
                 else -> result.notImplemented()
             }
         } catch (e: UnsupportedException) {
@@ -79,6 +84,7 @@ class FitKitPlugin(private val registrar: Registrar) : MethodCallHandler {
     }
 
     private fun hasPermissions(request: PermissionsRequest, result: Result) {
+
         val options = FitnessOptions.builder()
                 .addDataTypes(request.types.map { it.dataType })
                 .build()
@@ -232,33 +238,38 @@ class FitKitPlugin(private val registrar: Registrar) : MethodCallHandler {
         Log.d(TAG, "readSession: ${request.type.activity}")
 
         val readRequest = SessionReadRequest.Builder()
-                .read(request.type.dataType)
+                .read(DataType.TYPE_ACTIVITY_SEGMENT/*request.type.dataType*/)
                 .setTimeInterval(request.dateFrom.time, request.dateTo.time, TimeUnit.MILLISECONDS)
                 .readSessionsFromAllApps()
-                .enableServerQueries()
+//                .enableServerQueries()
                 .build()
-
+        var sn = request.isSleep
+        var s = true
+        if (sn != true) {
+            s = false
+        }
         Fitness.getSessionsClient(registrar.context(), GoogleSignIn.getLastSignedInAccount(registrar.context())!!)
                 .readSession(readRequest)
-                .addOnSuccessListener { response -> onSuccess(request, response, result) }
+                .addOnSuccessListener { response -> onSuccess(request, response, result, s) }
                 .addOnFailureListener { e -> result.error(TAG, e.message, null) }
                 .addOnCanceledListener { result.error(TAG, "GoogleFit Cancelled", null) }
     }
 
-    private fun onSuccess(request: ReadRequest<Type.Activity>, response: SessionReadResponse, result: Result) {
-        response.sessions.filter { request.type.activity == it.activity }
+    private fun onSuccess(request: ReadRequest<Type.Activity>, response: SessionReadResponse, result: Result, isSleep: Boolean) {
+//        response.sessions.filter { request.type.activity == it.activity }
+        response.sessions
                 .let { list ->
                     when (request.limit != null) {
                         true -> list.takeLast(request.limit)
                         else -> list
                     }
                 }
-                .map { session -> sessionToMap(session, response.getDataSet(session)) }
+                .filter { !isSleep || it.getValue() == 72 }
+                .map { session -> sessionToMap(session, response.getDataSet(session), isSleep) }
                 .let(result::success)
     }
 
-    private fun sessionToMap(session: Session, dataSets: List<DataSet>): Map<String, Any> {
-        // from all data points find the top used streamName
+    private fun sessionToMap(session: Session, dataSets: List<DataSet>, isSleep: Boolean): Map<String, Any> {
         val source = dataSets.asSequence()
                 .filterNot { it.isEmpty }
                 .flatMap { it.dataPoints.asSequence() }
@@ -267,7 +278,31 @@ class FitKitPlugin(private val registrar: Registrar) : MethodCallHandler {
                 .eachCount()
                 .maxBy { it.value }
                 ?.key ?: session.name ?: ""
+        if (isSleep) {
+            var list = mutableListOf<Map<String, Any>>()
+            for (dataSet in dataSets) {
+                for (point in dataSet.dataPoints) {
+                    // The Activity defines whether this segment is light, deep, REM or awake.
+                    val sleepStage = point.getValue(Field.FIELD_ACTIVITY).asActivity()
+                    val start = point.getStartTime(TimeUnit.MILLISECONDS)
+                    val end = point.getEndTime(TimeUnit.MILLISECONDS)
+                    val map = mapOf(
+                            "value" to getValueFromStage(sleepStage),
+                            "date_from" to start,
+                            "date_to" to end,
+                            "source" to source,
+                            "user_entered" to (source == "user_input")
+                    )
+                    list.add(map)
+                }
+            }
+            return mapOf(
+                    "sleep_session" to list
+            )
+        }
 
+
+        Log.d(TAG, "readSample: ${session.getValue()}");
         return mapOf(
                 "value" to session.getValue(),
                 "date_from" to session.getStartTime(TimeUnit.MILLISECONDS),
@@ -275,5 +310,21 @@ class FitKitPlugin(private val registrar: Registrar) : MethodCallHandler {
                 "source" to source,
                 "user_entered" to (source == "user_input")
         )
+    }
+
+    private fun getValueFromStage(sleepStage: String?): Int {
+        if (sleepStage == "sleep.light") {
+            return 109
+        }
+        if (sleepStage == "sleep.deep") {
+            return 110
+        }
+        if (sleepStage == "sleep.rem") {
+            return 111
+        }
+        if (sleepStage == "sleep.awake") {
+            return 112
+        }
+        return 72
     }
 }

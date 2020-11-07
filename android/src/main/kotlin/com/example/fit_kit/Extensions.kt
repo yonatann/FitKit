@@ -15,7 +15,9 @@ fun String.fromDartType(): Type? {
         "energy" -> Type.Sample(DataType.TYPE_CALORIES_EXPENDED)
         "water" -> Type.Sample(DataType.TYPE_HYDRATION)
         "sleep" -> Type.Activity(FitnessActivities.SLEEP)
-        else -> null
+        "exercise_time" -> Type.Activity(FitnessActivities.RUNNING)
+//        else -> Type.SampleActivity(DataType.TYPE_ACTIVITY_SEGMENT)
+        else -> Type.Activity(FitnessActivities.WALKING)
     }
 }
 
@@ -27,6 +29,8 @@ fun FitnessOptions.Builder.addDataTypes(dataTypes: List<DataType>) = apply {
 fun Session.getValue(): Int {
     return when (this.activity) {
         FitnessActivities.SLEEP -> 72
+        FitnessActivities.RUNNING -> 8
+        FitnessActivities.WALKING -> 7
         FitnessActivities.SLEEP_LIGHT -> 109
         FitnessActivities.SLEEP_DEEP -> 110
         FitnessActivities.SLEEP_REM -> 111
