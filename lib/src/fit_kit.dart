@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 part of fit_kit;
 
 class FitKit {
@@ -42,7 +44,7 @@ class FitKit {
       "isSleep": isSleep
     }).then(
       (response) {
-        if (isSleep == true) {
+        if (isSleep == true && Platform.isAndroid == true) {
           List<FitData> res = List<FitData>();
           for (var item in response) {
             List list = item["sleep_session"];

@@ -283,11 +283,13 @@ class FitKitPlugin(private val registrar: Registrar) : MethodCallHandler {
             for (dataSet in dataSets) {
                 for (point in dataSet.dataPoints) {
                     // The Activity defines whether this segment is light, deep, REM or awake.
-                    val sleepStage = point.getValue(Field.FIELD_ACTIVITY).asActivity()
+                    val sleepStage = point.getValue(Field.FIELD_ACTIVITY).asInt();
+                    val activity = point.getValue(Field.FIELD_ACTIVITY).asActivity();
                     val start = point.getStartTime(TimeUnit.MILLISECONDS)
                     val end = point.getEndTime(TimeUnit.MILLISECONDS)
                     val map = mapOf(
-                            "value" to getValueFromStage(sleepStage),
+                            "value" to sleepStage,
+                            "activity" to activity,
                             "date_from" to start,
                             "date_to" to end,
                             "source" to source,
